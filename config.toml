@@ -1,4 +1,4 @@
-baseURL = 'https://nullcheck-me.github.io/'
+baseURL = 'https://nullcheck.me/'
 title = 'nullcheck.me'
 languageCode = 'en'     # For RSS generation
 
