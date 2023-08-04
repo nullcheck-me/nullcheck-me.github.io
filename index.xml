@@ -1,4 +1,218 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>nullcheck.me</title><link>https://nullcheck.me/</link><description>Recent content on nullcheck.me</description><generator>Hugo -- gohugo.io</generator><language>en-gb</language><atom:link href="https://nullcheck.me/index.xml" rel="self" type="application/rss+xml"/><item><title>Hello World!</title><link>https://nullcheck.me/p/hello-world/</link><pubDate>Sat, 29 Jul 2023 00:27:40 +0000</pubDate><guid>https://nullcheck.me/p/hello-world/</guid><description>&lt;img src="https://nullcheck.me/p/hello-world/cover.jpg" alt="Featured image of post Hello World!" />&lt;p>Welcome to nullcheck.me!&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>nullcheck.me</title><link>https://nullcheck.me/</link><description>Recent content on nullcheck.me</description><generator>Hugo -- gohugo.io</generator><language>en-gb</language><atom:link href="https://nullcheck.me/index.xml" rel="self" type="application/rss+xml"/><item><title>Fixing Proxmox PVE issues when adding or removing PCIe devices</title><link>https://nullcheck.me/p/fixing-changes-in-proxmox-pcie-ids/</link><pubDate>Thu, 03 Aug 2023 22:10:52 +0000</pubDate><guid>https://nullcheck.me/p/fixing-changes-in-proxmox-pcie-ids/</guid><description>&lt;img src="https://nullcheck.me/p/fixing-changes-in-proxmox-pcie-ids/pexels-pok-rie-1432794.jpg" alt="Featured image of post Fixing Proxmox PVE issues when adding or removing PCIe devices" />&lt;p>Proxmox Virtual Environment (PVE) offers powerful virtualization capabilities but tinkering with PCIe devices can lead to unexpected challenges. If like me, you didn&amp;rsquo;t realize that messing around with PCIe devices in your Proxmox PVE host would break your VMs, keep reading.&lt;/p>
+&lt;p>In my case, I added a new NVMe SSD, but this can also happen when removing PCIe devices.&lt;/p>
+&lt;p>Access the Proxmox PVE host with mouse and keyboard and log in as a privileged user.&lt;/p>
+&lt;h2 id="gathering-info-pcie-bus-ids">Gathering info: PCIe bus ids&lt;/h2>
+&lt;p>It&amp;rsquo;s &lt;strong>EXTREMELY&lt;/strong> likely that the device addresses change upon adding or removing any PCIe devices:&lt;/p>
+&lt;blockquote>
+&lt;p>&lt;p>[For each restart] the PCI BIOS must walk the base PCI bus (starting at bus 0), subsequent bridges, and bridged devices to search and identify other PCI buses as if it were the first time.&lt;/p>
+&lt;p>Each time the PCI BIOS discovers another PCI bus after a physical configuration change is made, it increments the bus number and continues to walk the bus until all other buses are discovered.&lt;/p>
+&lt;p>As it discovers each bus and/or bridge, the PCI BIOS:&lt;/p>
+&lt;ul>
+&lt;li>Records each unique bus number&lt;/li>
+&lt;li>Associates the bus number to a bus or bridged PCI device&lt;/li>
+&lt;/ul>
+&lt;/p>&lt;span class="cite">&lt;span>― &lt;/span>&lt;span>Compaq, &lt;/span>&lt;a href="https://tinyurl.com/59f2cwyh">&lt;cite>PCI Bus Numbering in a Microsoft Windows NT Environment&lt;/cite>&lt;/a>&lt;/span>&lt;/blockquote>
+&lt;p>In order to better understand how the PCIe bus ids have changed, lets run &lt;code>lspci&lt;/code> to get a list of PCIe devices installed and their respective bus ids.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ lspci
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">[&lt;/span>...&lt;span class="o">]&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">01:00.0 Non-Volatile memory controller: MAXIO Technology &lt;span class="o">(&lt;/span>Hangzhou&lt;span class="o">)&lt;/span> Ltd. NVMe SSD Controller MAP1202 &lt;span class="o">(&lt;/span>rev 01&lt;span class="o">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">02:00.0 Ethernet controller: Intel Corporation Device 125c &lt;span class="o">(&lt;/span>rev 04&lt;span class="o">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">03:00.0 Ethernet controller: Intel Corporation Device 125c &lt;span class="o">(&lt;/span>rev 04&lt;span class="o">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">04:00.0 Ethernet controller: Intel Corporation Device 125c &lt;span class="o">(&lt;/span>rev 04&lt;span class="o">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">05:00.0 Ethernet controller: Intel Corporation Device 125c &lt;span class="o">(&lt;/span>rev 04&lt;span class="o">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>The NVMe drive I just installed is &lt;code>01:00.0&lt;/code>. That bus id used to belong to the first Intel ethernet controller. So in this case, all NICs bus ids have increased by one.&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>01:00.0&lt;/code> is now &lt;code>02:00.0&lt;/code>&lt;/li>
+&lt;li>&lt;code>02:00.0&lt;/code> is now &lt;code>03:00.0&lt;/code>&lt;/li>
+&lt;li>&amp;hellip;and so on&lt;/li>
+&lt;/ul>
+&lt;h2 id="potential-issues">Potential issues&lt;/h2>
+&lt;h3 id="issue-1-network-connectivity-is-gone">Issue 1: Network connectivity is gone&lt;/h3>
+&lt;p>If your NICs are PCIe (which is very likely!), they would be affected by this:&lt;/p>
+&lt;blockquote>
+&lt;p>&lt;p>The Linux kernel assigns names to network interfaces by combining a fixed prefix and a number that increases as the kernel initializes the network devices. [&amp;hellip;] If you add another network interface card to the system, the assignment of the kernel device names is no longer fixed. Consequently, after a reboot, the kernel can name the device differently.&lt;/p>
+&lt;p>When the consistent network device name feature is enabled, the &lt;code>udev&lt;/code> device manager creates the names of devices based on different criteria.&lt;/p>
+&lt;ul>
+&lt;li>
+&lt;p>&lt;code>en&lt;/code> for Ethernet&lt;/p>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;code>[P&amp;lt;domain_number&amp;gt;]p&amp;lt;bus&amp;gt;s&amp;lt;slot&amp;gt;[f&amp;lt;function&amp;gt;][d&amp;lt;device_id&amp;gt;]&lt;/code>&lt;/p>
+&lt;/li>
+&lt;/ul>
+&lt;/p>&lt;span class="cite">&lt;span>― &lt;/span>&lt;span>RedHat, &lt;/span>&lt;a href="https://tinyurl.com/2cphu56z">&lt;cite>RHEL 8 documentation. Chapter 1. Consistent network interface device naming&lt;/cite>&lt;/a>&lt;/span>&lt;/blockquote>
+&lt;p>Run &lt;code>ip link&lt;/code> (with the ethernet cable connected) in order to get the interface name for the Proxmox Linux Bridge.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ ip link
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">1: lo: &amp;lt;LOOPBACK,UP,LOWER_UP&amp;gt; mtu &lt;span class="m">65536&lt;/span> qdisc noqueue state UNKNOWN mode DEFAULT group default qlen &lt;span class="m">1000&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">5: enp5s0: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP&amp;gt; mtu &lt;span class="m">1500&lt;/span> qdisc mq master vmbr0 state UP mode DEFAULT group default qlen &lt;span class="m">1000&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> link/ether xx:xx:xx:xx:xx:xx brd ff:ff:ff:ff:ff:ff
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">7: vmbr0: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP&amp;gt; mtu &lt;span class="m">1500&lt;/span> qdisc noqueue state UP mode DEFAULT group default qlen &lt;span class="m">1000&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> link/ether xx:xx:xx:xx:xx:xx brd ff:ff:ff:ff:ff:ff
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Leaving the loopback (&lt;code>lo&lt;/code>) and Linux Bridge (&lt;code>vmbr0&lt;/code>) interfaces aside, the new interface name for the Linux Bridge is &lt;code>enp5s0&lt;/code>.&lt;/p>
+&lt;p>Comparing against the naming criteria, we can understand that &lt;code>enp5s0&lt;/code>:&lt;/p>
+&lt;ul>
+&lt;li>Is an ethernet connection.&lt;/li>
+&lt;li>Its bus is &lt;code>5&lt;/code>.&lt;/li>
+&lt;li>Its slot within the bus is &lt;code>0&lt;/code>.&lt;/li>
+&lt;/ul>
+&lt;p>Can now edit &lt;code>/etc/network/interfaces&lt;/code> to reflect the change, and restart the &lt;code>networking&lt;/code> service.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-diff" data-lang="diff">&lt;span class="line">&lt;span class="cl"># /etc/network/interfaces
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">auto lo
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">iface lo inet loopback
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">auto vmbr0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">iface vmbr0 inet static
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> address 192.168.1.120/24
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> gateway 192.168.1.1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gd">- bridge-ports enp4s0
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gd">&lt;/span>&lt;span class="gi">+ bridge-ports enp5s0
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gi">&lt;/span> bridge-stp off
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bridge-fd 0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bridge-vlan-aware yes
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> bridge-vids 2-4094
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ systemctl restart networking.service
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>At this point, network connectivity should be restored. Check by pinging Google: &lt;code>ping -c3 google.com&lt;/code>.&lt;/p>
+&lt;h3 id="issue-2-broken-passthrough-pci-devices">Issue 2: Broken Passthrough PCI devices&lt;/h3>
+&lt;p>Now, one of Proxmox PVE features is the ability to do PCI Passthrough, allowing the guest VM to access host physical resources. As you have probably guessed by now, if any of your VMs use PCI passthrough, they will also be affected by the PCIe bus changes.&lt;/p>
+&lt;div class="notice--info">
+&lt;p>This is required for every VM that does PCI passthrough.&lt;/p>
+&lt;/div>
+&lt;p>Retrieve the VM id of the relevant machine, with the following command:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ qm list
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">VMID NAME STATUS MEM&lt;span class="o">(&lt;/span>MB&lt;span class="o">)&lt;/span> BOOTDISK&lt;span class="o">(&lt;/span>GB&lt;span class="o">)&lt;/span> PID
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="m">100&lt;/span> routervm running &lt;span class="m">8192&lt;/span> 32.00 &lt;span class="m">8705&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Then export the VM id as an environment variable, to avoid having to remember it every time: &lt;code>export VM_ID=100&lt;/code>.&lt;/p>
+&lt;p>Ensure the VM is (gracefully) stopped, by running &lt;code>qm shutdown $VM_ID&lt;/code>. Once stopped, check the VM config, with &lt;code>qm config $VM_ID&lt;/code>.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;span class="lnt">9
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ qm config &lt;span class="nv">$VM_ID&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">boot: &lt;span class="nv">order&lt;/span>&lt;span class="o">=&lt;/span>scsi0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cores: &lt;span class="m">4&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cpu: kvm64,flags&lt;span class="o">=&lt;/span>+aes
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">hostpci0: 0000:02:00
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">hostpci1: 0000:03:00
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">hostpci2: 0000:04:00
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">[&lt;/span>...&lt;span class="o">]&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>&lt;code>hostpci0&lt;/code>, &lt;code>hostpci1&lt;/code> and &lt;code>hostpci2&lt;/code> are all NICs that are PCI passthrough devices. As mentioned earlier, the bus ids for the NICs has increased by one, so just need to edit the VM config file located in &lt;code>/etc/pve/qemu-server/${VM_ID}.conf&lt;/code> in my case:&lt;/p>
+&lt;div class="notice--warn">
+&lt;p>Remember to shutdown the machine first if you haven&amp;rsquo;t yet: &lt;code>qm shutdown $VM_ID&lt;/code>&lt;/p>
+&lt;/div>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-diff" data-lang="diff">&lt;span class="line">&lt;span class="cl"># /etc/pve/qemu-server/$VM_ID.conf
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[...]
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cores: 4
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cpu: kvm64,flags=+aes
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gd">- hostpci0: 0000:02:00
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gd">&lt;/span>&lt;span class="gi">+ hostpci0: 0000:03:00
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gi">&lt;/span>&lt;span class="gd">- hostpci1: 0000:03:00
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gd">&lt;/span>&lt;span class="gi">+ hostpci1: 0000:04:00
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gi">&lt;/span>&lt;span class="gd">- hostpci2: 0000:04:00
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gd">&lt;/span>&lt;span class="gi">+ hostpci2: 0000:05:00
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="gi">&lt;/span>memory: 8192
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">[...]
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Now you should just be able to either start the VM from the Proxmox Web UI (remember, we just restored connectivity to it!). Or by running the following command: &lt;code>qm start $VM_ID&lt;/code>.&lt;/p></description></item><item><title>Hello World!</title><link>https://nullcheck.me/p/hello-world/</link><pubDate>Sat, 29 Jul 2023 00:27:40 +0000</pubDate><guid>https://nullcheck.me/p/hello-world/</guid><description>&lt;img src="https://nullcheck.me/p/hello-world/cover.jpg" alt="Featured image of post Hello World!" />&lt;p>Welcome to nullcheck.me!&lt;/p>
 &lt;p>This blog is your go-to destination for all things software development. From DevOps and cloud computing to CI/CD and IaC. But that&amp;rsquo;s not all – we&amp;rsquo;ll also explore other hobbies like electronics, 3D printing, and simracing!&lt;/p>
 &lt;p>I&amp;rsquo;m your host, a passionate software engineer, and together with you, we&amp;rsquo;ll embark on a journey of learning and exploration. I believe in keeping things simple and straightforward, so expect practical insights, how-to guides, and informative posts without any unnecessary fluff.&lt;/p>
 &lt;p>So, whether you&amp;rsquo;re a tech guru or just starting your coding journey, join us in this adventure of learning and exploration. Let&amp;rsquo;s dive into thisthe world of software development and discover the wonders it holds together!&lt;/p>
